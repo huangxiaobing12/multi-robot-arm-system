@@ -63,3 +63,16 @@ Infer the model:
 ```
 python Fr5_test.py --model_path your_model_dir --gui True
 ```
+
+## Citation
+If you use this project in your research, please cite it:
+
+```bibtex
+@misc{wang2024fr5rl,
+  title        = {FR5 Reinforcement Learning: Grasping with the FAIRINO FR5 Robot Arm},
+  author       = {Wang, Ziyuan},
+  year         = {2024},
+  howpublished = {GitHub repository},
+  url          = {https://github.com/WangZY233/FR5_Reinforcement-learning}
+}
+```
