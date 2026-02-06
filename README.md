@@ -76,3 +76,7 @@ If you use this project in your research, please cite it:
   url          = {https://github.com/WangZY233/FR5_Reinforcement-learning}
 }
 ```
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=WangZY233/FR5_Reinforcement-learning&type=date&legend=bottom-right)](https://www.star-history.com/#WangZY233/FR5_Reinforcement-learning&type=date&legend=bottom-right)
