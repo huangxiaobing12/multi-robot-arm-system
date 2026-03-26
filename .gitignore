@@ -1,17 +1,18 @@
-# Build and Release Folders
-bin-debug/
-bin-release/
-[Oo]bj/
-[Bb]in/
+__pycache__/
+*.pyc
+*.pyo
 
-# Other files and folders
-.settings/
+logs/
+*.log
 
-# Executables
-*.swf
-*.air
-*.ipa
-*.apk
+models/
+*.zip
+
+.vscode/
+.idea/
+
+*.npz
+events.out.tfevents.*
 
 # Project files, i.e. `.project`, `.actionScriptProperties` and `.flexProperties`
 # should NOT be excluded as they contain compiler settings and other important
