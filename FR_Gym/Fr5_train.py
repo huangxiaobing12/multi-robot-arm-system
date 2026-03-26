@@ -59,9 +59,9 @@ if __name__ == '__main__':
     import pybullet_data
     print(pybullet_data.getDataPath())
     # Instantiate the env
-    num_train = 1
-    # env = SubprocVecEnv([make_env(i) for i in range(num_train)])
-    env = DummyVecEnv([make_env(i) for i in range(num_train)])
+    num_train = 16
+    env = SubprocVecEnv([make_env(i) for i in range(num_train)])
+    # env = DummyVecEnv([make_env(i) for i in range(num_train)])
     
     new_logger = configure(logs_dir, ["stdout", "csv", "tensorboard"])
 

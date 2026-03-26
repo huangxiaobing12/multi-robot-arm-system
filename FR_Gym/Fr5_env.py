@@ -193,10 +193,10 @@ class FR5_Env(gym.Env):
         # self.goaly = np.random.uniform(0.6, 0.8, 1)
         # self.goalz = np.random.uniform(0.1, 0.3, 1)
         self.goalx = 0
-        self.goaly = 0.4
+        self.goaly = 0.1
         self.goalz = 0.2
         self.goalx1 = 0
-        self.goaly1 = 0.7
+        self.goaly1 = 0.9
         self.goalz1 = 0.2
         self.target_position = [self.goalx, self.goaly, self.goalz]
         self.targettable_position = [self.goalx, self.goaly, self.goalz-0.175]
