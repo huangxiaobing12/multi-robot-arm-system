@@ -19,8 +19,10 @@ from pybullet_utils import bullet_client
 from scipy.spatial.transform import Rotation as R
 from loguru import logger
 import random
-from reward import grasp_reward
-
+from .reward import grasp_reward
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 项目根目录
+URDF_PATH = os.path.join(ROOT, "fr5_description", "urdf", "fr5v6.urdf")
+TABLE_PATH = os.path.join(ROOT, "env", "table", "table.urdf")
 class FR5_Env(gym.Env):
     """Custom Environment that follows gym interface."""
 
@@ -33,12 +35,12 @@ class FR5_Env(gym.Env):
         # self.last_success = False
 
         # 设置最小的关节变化量
-        low_action = np.array([-1.0,-1.0,-1.0,-1.0,-1.0,-1.0])
-        high_action = np.array([1.0,1.0,1.0,1.0,1.0,1.0])
+        low_action = np.array([-1.0,-1.0,-1.0,-1.0,-1.0,-1.0,-1.0,-1.0,-1.0,-1.0,-1.0,-1.0])
+        high_action = np.array([1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0])
         self.action_space = spaces.Box(low=low_action, high=high_action, dtype=np.float32)
 
-        low = np.zeros((1,12),dtype=np.float32)
-        high = np.ones((1,12),dtype=np.float32)
+        low = np.zeros((1,24),dtype=np.float32)
+        high = np.ones((1,24),dtype=np.float32)
         self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
 
         # 初始化pybullet环境
@@ -60,16 +62,28 @@ class FR5_Env(gym.Env):
         '''
         # boxId = self.p.loadURDF("plane.urdf")
         # 创建机械臂
-        self.fr5 = self.p.loadURDF("FR5_Reinforcement-learning/fr5_description/urdf/fr5v6.urdf",useFixedBase=True, basePosition=[0, 0, 0],
-                              baseOrientation=p.getQuaternionFromEuler([0, 0, np.pi]),flags = p.URDF_USE_SELF_COLLISION)
+        self.fr5 = self.p.loadURDF(URDF_PATH, useFixedBase=True, basePosition=[0,-0.55,0], 
+                                   baseOrientation=p.getQuaternionFromEuler([0, 0, np.pi]),flags = p.URDF_USE_SELF_COLLISION)
+        # self.fr5 = self.p.loadURDF("FR5_Reinforcement-learning/fr5_description/urdf/fr5v6.urdf",useFixedBase=True, basePosition=[0, 0, 0],
+        #                       baseOrientation=p.getQuaternionFromEuler([0, 0, np.pi]),flags = p.URDF_USE_SELF_COLLISION)
 
+        self.fr5_2 = self.p.loadURDF(
+            URDF_PATH,
+            useFixedBase=True,
+            basePosition=[0, 1.5, 0],
+            baseOrientation=self.p.getQuaternionFromEuler([0, 0, 0]),
+            flags=self.p.URDF_USE_SELF_COLLISION
+        )
         # 创建桌子
-        self.table = p.loadURDF("table/table.urdf", basePosition=[0, 0.5, -0.63],baseOrientation=p.getQuaternionFromEuler([0, 0, np.pi/2]))
+        self.table = p.loadURDF(TABLE_PATH, basePosition=[0, 0.5, -0.63],baseOrientation=p.getQuaternionFromEuler([0, 0, np.pi/2]))
 
         # 创建目标
         collisionTargetId = self.p.createCollisionShape(shapeType=p.GEOM_CYLINDER,
                                           radius=0.02,height = 0.05)
         self.target = self.p.createMultiBody(baseMass=0,  # 质量
+                           baseCollisionShapeIndex=collisionTargetId,
+                           basePosition=[0.5, 0.5, 2]) 
+        self.target1 = self.p.createMultiBody(baseMass=0,  # 质量
                            baseCollisionShapeIndex=collisionTargetId,
                            basePosition=[0.5, 0.5, 2]) 
         
@@ -78,39 +92,118 @@ class FR5_Env(gym.Env):
                                             radius=0.03,height = 0.3)
         self.targettable = self.p.createMultiBody(baseMass=0,  # 质量
                             baseCollisionShapeIndex=collisionTargetId,
-                            basePosition=[0.5, 0.5, 2])                                                          
+                            basePosition=[0.5, 0.5, 2]) 
+        self.targettable1 = self.p.createMultiBody(baseMass=0,  # 质量
+                            baseCollisionShapeIndex=collisionTargetId,
+                            basePosition=[0.5, 0.5, 2])                                                            
 
     def step(self, action):
-        '''step'''
+        """step"""
         info = {}
-        # Execute one time step within the environment
-        # 初始化关节角度列表
-        joint_angles = []
 
-        # 获取每个关节的状态
-        for i in [1,2,3,4,5,6]:
+        joint_ids = [1, 2, 3, 4, 5, 6]
+        ctrl_ids = [1, 2, 3, 4, 5, 6, 8, 9]
+
+        action = np.array(action, dtype=np.float32)
+
+        # 双机械臂动作维度检查
+        if action.shape[0] != 12:
+            raise ValueError(f"action维度应该是12, 但当前是 {action.shape[0]}")
+
+        action_1 = action[0:6]
+        action_2 = action[6:12]
+
+        # ---------- 机械臂1 ----------
+        joint_angles_1 = []
+        for i in joint_ids:
             joint_info = p.getJointState(self.fr5, i)
-            joint_angle = joint_info[0]  # 第一个元素是当前关节角度
-            joint_angles.append(joint_angle)
+            joint_angles_1.append(joint_info[0])
 
-        # 执行action
-        Fr5_joint_angles = np.array(joint_angles)+(np.array(action[0:6])/180*np.pi)
-        gripper = np.array([0,0])
-        anglenow = np.hstack([Fr5_joint_angles,gripper])
-        p.setJointMotorControlArray(self.fr5,[1,2,3,4,5,6,8,9],p.POSITION_CONTROL,targetPositions=anglenow)
-        
+        target_joint_angles_1 = np.array(joint_angles_1) + (action_1 / 180.0 * np.pi)
+        gripper_1 = np.array([0.0, 0.0])
+        target_positions_1 = np.hstack([target_joint_angles_1, gripper_1])
+
+        p.setJointMotorControlArray(
+            self.fr5,
+            ctrl_ids,
+            p.POSITION_CONTROL,
+            targetPositions=target_positions_1
+        )
+
+        # ---------- 机械臂2 ----------
+        joint_angles_2 = []
+        for i in joint_ids:
+            joint_info = p.getJointState(self.fr5_2, i)
+            joint_angles_2.append(joint_info[0])
+
+        target_joint_angles_2 = np.array(joint_angles_2) + (action_2 / 180.0 * np.pi)
+        gripper_2 = np.array([0.0, 0.0])
+        target_positions_2 = np.hstack([target_joint_angles_2, gripper_2])
+
+        p.setJointMotorControlArray(
+            self.fr5_2,
+            ctrl_ids,
+            p.POSITION_CONTROL,
+            targetPositions=target_positions_2
+        )
+
+        # 推进一步仿真
         for _ in range(20):
             self.p.stepSimulation()
-            # time.sleep(1./240.)
 
-        self.reward,info = grasp_reward(self)
-        
-        # observation计算
+        # 计算奖励
+        self.reward, info = grasp_reward(self)
+
+        # 更新观测
         self.get_observation()
 
         self.step_num += 1
 
         return self.observation, self.reward, self.terminated, self.truncated, info
+        # def step(self, action):
+    #     '''step'''
+    #     info = {}
+    #     # Execute one time step within the environment
+    #     # 初始化关节角度列表
+    #     joint_angles = []
+
+    #     # 获取每个关节的状态
+    #     for i in [1,2,3,4,5,6]:
+    #         joint_info = p.getJointState(self.fr5, i)
+    #         joint_angle = joint_info[0]  # 第一个元素是当前关节角度
+    #         joint_angles.append(joint_angle)
+
+    #     # 执行action
+    #     Fr5_joint_angles = np.array(joint_angles)+(np.array(action[0:6])/180*np.pi)
+    #     gripper = np.array([0,0])
+    #     anglenow = np.hstack([Fr5_joint_angles,gripper])
+    #     p.setJointMotorControlArray(self.fr5,[1,2,3,4,5,6,8,9],p.POSITION_CONTROL,targetPositions=anglenow)
+    #     joint_angles1 = []
+
+    #     # 获取每个关节的状态
+    #     for i in [1,2,3,4,5,6]:
+    #         joint_info1 = p.getJointState(self.fr51, i)
+    #         joint_angle1 = joint_info1[0]  # 第一个元素是当前关节角度
+    #         joint_angles1.append(joint_angle1)
+
+    #     # 执行action
+    #     Fr5_joint_angles1 = np.array(joint_angles1)+(np.array(action[6:12])/180*np.pi)
+    #     gripper1 = np.array([0,0])
+    #     anglenow1 = np.hstack([Fr5_joint_angles1,gripper1])
+    #     p.setJointMotorControlArray(self.fr51,[1,2,3,4,5,6,8,9],p.POSITION_CONTROL,targetPositions=anglenow1)
+        
+    #     for _ in range(20):
+    #         self.p.stepSimulation()
+    #         # time.sleep(1./240.)
+
+    #     self.reward,info = grasp_reward(self)
+        
+    #     # observation计算
+    #     self.get_observation()
+
+    #     self.step_num += 1
+
+    #     return self.observation, self.reward, self.terminated, self.truncated, info
 
     def reset(self, seed=None, options=None):
         '''重置环境参数'''
@@ -118,19 +211,33 @@ class FR5_Env(gym.Env):
         self.reward = 0
         self.terminated = False
         self.success = False
+        joint_ids = [1,2,3,4,5,6,8,9]
         # 重新设置机械臂的位置
         neutral_angle =[ -49.45849125928217, -57.601209583849, -138.394013961943, -164.0052115563118,-49.45849125928217,0,0,0]
         neutral_angle = [x * math.pi / 180 for x in neutral_angle]
-        p.setJointMotorControlArray(self.fr5,[1,2,3,4,5,6,8,9],p.POSITION_CONTROL,targetPositions=neutral_angle)
-
+        self.p.setJointMotorControlArray(self.fr5,[1,2,3,4,5,6,8,9],p.POSITION_CONTROL,targetPositions=neutral_angle)
+        self.p.setJointMotorControlArray(
+        self.fr5_2, joint_ids, self.p.POSITION_CONTROL,
+        targetPositions=neutral_angle
+    )
         # # 重新设置目标位置
-        self.goalx = np.random.uniform(-0.2, 0.2, 1)
-        self.goaly = np.random.uniform(0.6, 0.8, 1)
-        self.goalz = np.random.uniform(0.1, 0.3, 1)
-        self.target_position = [self.goalx[0], self.goaly[0], self.goalz[0]]
-        self.targettable_position = [self.goalx[0], self.goaly[0], self.goalz[0]-0.175]
+        # self.goalx = np.random.uniform(-0.2, 0.2, 1)
+        # self.goaly = np.random.uniform(0.6, 0.8, 1)
+        # self.goalz = np.random.uniform(0.1, 0.3, 1)
+        self.goalx = 0
+        self.goaly = 0.4
+        self.goalz = 0.2
+        self.goalx1 = 0
+        self.goaly1 = 0.7
+        self.goalz1 = 0.2
+        self.target_position = [self.goalx, self.goaly, self.goalz]
+        self.targettable_position = [self.goalx, self.goaly, self.goalz-0.175]
+        self.target_position1 = [self.goalx1, self.goaly1, self.goalz1]
+        self.targettable_position1 = [self.goalx1, self.goaly1, self.goalz1-0.175]
         self.p.resetBasePositionAndOrientation(self.targettable,self.targettable_position, [0, 0, 0, 1])
         self.p.resetBasePositionAndOrientation(self.target,self.target_position, [0, 0, 0, 1])
+        self.p.resetBasePositionAndOrientation(self.targettable1,self.targettable_position1, [0, 0, 0, 1])
+        self.p.resetBasePositionAndOrientation(self.target1,self.target_position1, [0, 0, 0, 1])
         
         
         for i in range(100):
@@ -146,55 +253,117 @@ class FR5_Env(gym.Env):
         infos['step_num'] = 0
         return self.observation,infos
 
-    def get_observation(self,add_noise = False):
-        """计算observation"""
-        Gripper_posx = p.getLinkState(self.fr5, 6)[0][0]
-        Gripper_posy = p.getLinkState(self.fr5, 6)[0][1]
-        Gripper_posz = p.getLinkState(self.fr5, 6)[0][2]
+    def get_single_arm_observation(self, robot_id, target_id, add_noise=False):
+        """单个机械臂对应单个目标的观测"""
+
+        # 末端位置
+        gripper_pos = p.getLinkState(robot_id, 6)[0]
+        gripper_pos = np.array(gripper_pos)
+
         relative_position = np.array([0, 0, 0.15])
-        
-        # 固定夹爪相对于机械臂末端的相对位置转换
-        rotation = R.from_quat(p.getLinkState(self.fr5, 7)[1])
+
+        # 夹爪中心位置
+        rotation = R.from_quat(p.getLinkState(robot_id, 7)[1])
         rotated_relative_position = rotation.apply(relative_position)
-        # print([Gripper_posx, Gripper_posy,Gripper_posz])
-        gripper_centre_pos = [Gripper_posx, Gripper_posy,Gripper_posz] + rotated_relative_position
+        gripper_centre_pos = gripper_pos + rotated_relative_position
 
-        joint_angles = [0,0,0,0,0,0]
-        for i in [1,2,3,4,5,6]:
-            joint_info = p.getJointState(self.fr5, i)
-            joint_angles[i-1]  = joint_info[0]*180/np.pi  # 第一个元素是当前关节角度
-            if add_noise == True:
-                joint_angles[i-1] = self.add_noise(joint_angles[i-1],range=0,gaussian=True)
-        # print("joint_angles",str(joint_angles))
-        # print("gripper_centre_pos",str(gripper_centre_pos))
+        # 6个关节角
+        joint_angles = [0, 0, 0, 0, 0, 0]
+        for i in [1, 2, 3, 4, 5, 6]:
+            joint_info = p.getJointState(robot_id, i)
+            joint_angles[i - 1] = joint_info[0] * 180 / np.pi
+            if add_noise:
+                joint_angles[i - 1] = self.add_noise(joint_angles[i - 1], range=0, gaussian=True)
 
-        # 计算夹爪的朝向
-        gripper_orientation = p.getLinkState(self.fr5, 7)[1]
-        gripper_orientation = R.from_quat(gripper_orientation)
-        gripper_orientation = gripper_orientation.as_euler('xyz', degrees=True)
+        obs_joint_angles = ((np.array(joint_angles, dtype=np.float32) / 180) + 1) / 2
 
-        # 计算obs
-        obs_joint_angles = ((np.array(joint_angles,dtype=np.float32)/180)+1)/2
+        obs_gripper_centre_pos = np.array([
+            (gripper_centre_pos[0] + 0.922) / 1.844,
+            (gripper_centre_pos[1] + 0.922) / 1.844,
+            (gripper_centre_pos[2] + 0.5) / 1
+        ], dtype=np.float32)
+
+        # 对应目标位置
+        target_position = np.array(p.getBasePositionAndOrientation(target_id)[0], dtype=np.float32)
+
+        obs_target_position = np.array([
+            (target_position[0] + 0.2) / 0.4,
+            (target_position[1] - 0.6) / 0.2,
+            (target_position[2] - 0.1) / 0.2
+        ], dtype=np.float32)
+
+        obs = np.hstack((
+            obs_gripper_centre_pos,   # 3
+            obs_joint_angles,         # 6
+            obs_target_position       # 3
+        )).astype(np.float32)
+
+        return obs
+    def get_observation(self, add_noise=False):
+        """两个机械臂、两个不同目标的 observation"""
+
+        # 机械臂1 -> target
+        obs_arm1 = self.get_single_arm_observation(self.fr5, self.target, add_noise)
+
+        # 机械臂2 -> target1
+        obs_arm2 = self.get_single_arm_observation(self.fr5_2, self.target1, add_noise)
+
+        # 拼接成总观测
+        self.observation = np.hstack((obs_arm1, obs_arm2)).astype(np.float32)
+
+        # 24维
+        self.observation = self.observation.reshape(1, 24)
+
+        # return self.observation
+    # def get_observation(self,add_noise = False):
+    #     """计算observation"""
+    #     Gripper_posx = p.getLinkState(self.fr5, 6)[0][0]
+    #     Gripper_posy = p.getLinkState(self.fr5, 6)[0][1]
+    #     Gripper_posz = p.getLinkState(self.fr5, 6)[0][2]
+    #     relative_position = np.array([0, 0, 0.15])
         
-        # gripper_centre_pos[0] = self.add_noise(gripper_centre_pos[0],range=0.005,gaussian=True)
-        # gripper_centre_pos[1] = self.add_noise(gripper_centre_pos[1],range=0.005,gaussian=True)
-        # gripper_centre_pos[2] = self.add_noise(gripper_centre_pos[2],range=0.005,gaussian=True)
-        obs_gripper_centre_pos = np.array([(gripper_centre_pos[0]+0.922)/1.844,
-                                           (gripper_centre_pos[1]+0.922)/1.844,
-                                           (gripper_centre_pos[2]+0.5)/1],dtype=np.float32)
+    #     # 固定夹爪相对于机械臂末端的相对位置转换
+    #     rotation = R.from_quat(p.getLinkState(self.fr5, 7)[1])
+    #     rotated_relative_position = rotation.apply(relative_position)
+    #     # print([Gripper_posx, Gripper_posy,Gripper_posz])
+    #     gripper_centre_pos = [Gripper_posx, Gripper_posy,Gripper_posz] + rotated_relative_position
+
+    #     joint_angles = [0,0,0,0,0,0]
+    #     for i in [1,2,3,4,5,6]:
+    #         joint_info = p.getJointState(self.fr5, i)
+    #         joint_angles[i-1]  = joint_info[0]*180/np.pi  # 第一个元素是当前关节角度
+    #         if add_noise == True:
+    #             joint_angles[i-1] = self.add_noise(joint_angles[i-1],range=0,gaussian=True)
+    #     # print("joint_angles",str(joint_angles))
+    #     # print("gripper_centre_pos",str(gripper_centre_pos))
+
+    #     # 计算夹爪的朝向
+    #     gripper_orientation = p.getLinkState(self.fr5, 7)[1]
+    #     gripper_orientation = R.from_quat(gripper_orientation)
+    #     gripper_orientation = gripper_orientation.as_euler('xyz', degrees=True)
+
+    #     # 计算obs
+    #     obs_joint_angles = ((np.array(joint_angles,dtype=np.float32)/180)+1)/2
         
-        obs_gripper_orientation = (np.array([gripper_orientation[0],gripper_orientation[1],gripper_orientation[2]],dtype=np.float32)+180)/360
+    #     # gripper_centre_pos[0] = self.add_noise(gripper_centre_pos[0],range=0.005,gaussian=True)
+    #     # gripper_centre_pos[1] = self.add_noise(gripper_centre_pos[1],range=0.005,gaussian=True)
+    #     # gripper_centre_pos[2] = self.add_noise(gripper_centre_pos[2],range=0.005,gaussian=True)
+    #     obs_gripper_centre_pos = np.array([(gripper_centre_pos[0]+0.922)/1.844,
+    #                                        (gripper_centre_pos[1]+0.922)/1.844,
+    #                                        (gripper_centre_pos[2]+0.5)/1],dtype=np.float32)
         
-        self.target_position = np.array(p.getBasePositionAndOrientation(self.target)[0])
+    #     obs_gripper_orientation = (np.array([gripper_orientation[0],gripper_orientation[1],gripper_orientation[2]],dtype=np.float32)+180)/360
+        
+    #     self.target_position = np.array(p.getBasePositionAndOrientation(self.target)[0])
 
-        obs_target_position = np.array([(self.target_position[0]+0.2)/0.4,
-                                        (self.target_position[1]-0.6)/0.2,
-                                        (self.target_position[2]-0.1)/0.2],dtype=np.float32)
+    #     obs_target_position = np.array([(self.target_position[0]+0.2)/0.4,
+    #                                     (self.target_position[1]-0.6)/0.2,
+    #                                     (self.target_position[2]-0.1)/0.2],dtype=np.float32)
 
-        self.observation = np.hstack((obs_gripper_centre_pos,obs_joint_angles,obs_target_position),dtype=np.float32).flatten()
+    #     self.observation = np.hstack((obs_gripper_centre_pos,obs_joint_angles,obs_target_position),dtype=np.float32).flatten()
 
-        self.observation = self.observation.flatten()
-        self.observation = self.observation.reshape(1,12)
+    #     self.observation = self.observation.flatten()
+    #     self.observation = self.observation.reshape(1,12)
         # self.observation = np.hstack((np.array(joint_angles,dtype=np.float32),target_delta_position[0]),dtype=np.float32)
 
 

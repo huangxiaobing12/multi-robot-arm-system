@@ -19,7 +19,7 @@ class TensorboardCallback(BaseCallback):
         # 遍历所有环境
         for i in range(len(self.locals['rewards'])):
             self.episode_total_rewards[i] += self.locals['rewards'][i]
-            self.episode_pose_rewards[i] += self.locals['infos'][i]['pose_reward']
+            # self.episode_pose_rewards[i] += self.locals['infos'][i]['pose_reward']
             self.episode_dis_rewards[i] += self.locals['infos'][i]['distance_reward']
             self.episode_success[i] += self.locals['infos'][i]['success_reward']
             self.episode_lengths[i] += 1
@@ -36,7 +36,7 @@ class TensorboardCallback(BaseCallback):
                     avg_success = self.episode_success[i] / self.log_interval
 
                     self.model.logger.record(f"reward/env_{i}", avg_reward, exclude="stdout")
-                    self.model.logger.record(f"pose_reward/env_{i}", avg_pose_reward, exclude="stdout")
+                    # self.model.logger.record(f"pose_reward/env_{i}", avg_pose_reward, exclude="stdout")
                     self.model.logger.record(f"distance_reward/env_{i}", avg_dis_reward, exclude="stdout")
                     self.model.logger.record(f"success_rate/env_{i}", avg_success, exclude="stdout")
 
@@ -44,7 +44,7 @@ class TensorboardCallback(BaseCallback):
 
                     # 重置累积奖励和回合长度
                     self.episode_total_rewards[i] = 0.0
-                    self.episode_pose_rewards[i] = 0.0
+
                     self.episode_dis_rewards[i] = 0.0
                     self.episode_success[i] = 0.0
                     self.episode_lengths[i] = 0

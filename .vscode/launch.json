@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "FR5 Train (Debug)",
+        "type": "python",
+        "request": "launch",
+        "module": "FR_Gym.Fr5_train",
+        "cwd": "${workspaceFolder}",
+        "console": "integratedTerminal",
+  
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}"
+        },
+  
+        "justMyCode": false
+      }
+    ]
+  }

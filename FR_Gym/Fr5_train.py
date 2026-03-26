@@ -9,27 +9,30 @@
 import os
 import sys
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
-sys.path.append(r"FR5_Reinforcement-learning\utils")
+# sys.path.append(r"FR5_Reinforcement-learning\utils")
 
 from stable_baselines3 import A2C,PPO,DDPG,TD3,SAC
 from stable_baselines3.common.vec_env import DummyVecEnv,SubprocVecEnv
-from Fr5_env import FR5_Env
+from .Fr5_env import FR5_Env
 import time
 
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import EvalCallback,CallbackList,BaseCallback,CheckpointCallback
-from Callback import TensorboardCallback
+from .Callback import TensorboardCallback
 from loguru import logger
-from arguments import get_args
+from utils.arguments import get_args
 
 now = time.strftime('%m%d-%H%M%S', time.localtime())
 args, kwargs = get_args()
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+models_dir = os.path.join(BASE_DIR, "models", "PPO")
+logs_dir = os.path.join(BASE_DIR, "logs", "PPO")
 # HACK
-models_dir = args.models_dir
-logs_dir = args.logs_dir
+# models_dir = args.models_dir
+# logs_dir = args.logs_dir
 checkpoints = args.checkpoints
 test = args.test
 
@@ -53,17 +56,25 @@ if __name__ == '__main__':
         os.makedirs(logs_dir)
     if not os.path.exists(checkpoints):
         os.makedirs(checkpoints)
-
+    import pybullet_data
+    print(pybullet_data.getDataPath())
     # Instantiate the env
-    num_train = 16
-    env = SubprocVecEnv([make_env(i) for i in range(num_train)])
-    # env = DummyVecEnv([make_env() for i in range(num_train)])
+    num_train = 1
+    # env = SubprocVecEnv([make_env(i) for i in range(num_train)])
+    env = DummyVecEnv([make_env(i) for i in range(num_train)])
     
     new_logger = configure(logs_dir, ["stdout", "csv", "tensorboard"])
 
     # HACK
     # Define and Train the agent
-    model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=logs_dir,batch_size=256,device="cuda")
+    # model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=logs_dir,batch_size=256,device="cuda")
+    best_zip = os.path.join(models_dir, "PPO-run-eposide286.zip")
+    if os.path.isfile(best_zip):
+        model = PPO.load(best_zip, env=env, device="cuda")
+        print("✅ Loaded:", best_zip)
+    else:
+        model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=logs_dir, batch_size=256, device="cuda")
+        print("🆕 New model created")
     # model = SAC("MlpPolicy",env, verbose=1, tensorboard_log=logs_dir,batch_size=256,device="cuda",gamma = 0.9,learning_rate = 0.00001)
     # model = PPO(policy = "MlpPolicy",
     #         env = env,
