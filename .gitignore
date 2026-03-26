@@ -1,19 +1,36 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 
+# Logs
 logs/
 *.log
 
+# RL / training outputs
 models/
 *.zip
-
-.vscode/
-.idea/
-
 *.npz
 events.out.tfevents.*
 
-# Project files, i.e. `.project`, `.actionScriptProperties` and `.flexProperties`
-# should NOT be excluded as they contain compiler settings and other important
-# information for Eclipse / Flash Builder.
+# Environments
+.env
+.venv
+env/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
