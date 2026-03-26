@@ -53,6 +53,8 @@ class FR5_Env(gym.Env):
         self.p.setGravity(0, 0, -9.81)
         self.p.setAdditionalSearchPath(pybullet_data.getDataPath())
 
+        self.arm1_success = False
+        self.arm2_success = False
         # 初始化环境
         self.init_env()
 
@@ -64,6 +66,8 @@ class FR5_Env(gym.Env):
         # 创建机械臂
         self.fr5 = self.p.loadURDF(URDF_PATH, useFixedBase=True, basePosition=[0,-0.55,0], 
                                    baseOrientation=p.getQuaternionFromEuler([0, 0, np.pi]),flags = p.URDF_USE_SELF_COLLISION)
+        self.arm1_success = False
+        self.arm2_success = False
         # self.fr5 = self.p.loadURDF("FR5_Reinforcement-learning/fr5_description/urdf/fr5v6.urdf",useFixedBase=True, basePosition=[0, 0, 0],
         #                       baseOrientation=p.getQuaternionFromEuler([0, 0, np.pi]),flags = p.URDF_USE_SELF_COLLISION)
 
@@ -106,7 +110,6 @@ class FR5_Env(gym.Env):
 
         action = np.array(action, dtype=np.float32)
 
-        # 双机械臂动作维度检查
         if action.shape[0] != 12:
             raise ValueError(f"action维度应该是12, 但当前是 {action.shape[0]}")
 
@@ -119,7 +122,12 @@ class FR5_Env(gym.Env):
             joint_info = p.getJointState(self.fr5, i)
             joint_angles_1.append(joint_info[0])
 
-        target_joint_angles_1 = np.array(joint_angles_1) + (action_1 / 180.0 * np.pi)
+        if not self.arm1_success:
+            target_joint_angles_1 = np.array(joint_angles_1) + (action_1 / 180.0 * np.pi)
+        else:
+            # 已成功，保持当前位置不动
+            target_joint_angles_1 = np.array(joint_angles_1)
+
         gripper_1 = np.array([0.0, 0.0])
         target_positions_1 = np.hstack([target_joint_angles_1, gripper_1])
 
@@ -136,7 +144,11 @@ class FR5_Env(gym.Env):
             joint_info = p.getJointState(self.fr5_2, i)
             joint_angles_2.append(joint_info[0])
 
-        target_joint_angles_2 = np.array(joint_angles_2) + (action_2 / 180.0 * np.pi)
+        if not self.arm2_success:
+            target_joint_angles_2 = np.array(joint_angles_2) + (action_2 / 180.0 * np.pi)
+        else:
+            target_joint_angles_2 = np.array(joint_angles_2)
+
         gripper_2 = np.array([0.0, 0.0])
         target_positions_2 = np.hstack([target_joint_angles_2, gripper_2])
 
@@ -160,50 +172,6 @@ class FR5_Env(gym.Env):
         self.step_num += 1
 
         return self.observation, self.reward, self.terminated, self.truncated, info
-        # def step(self, action):
-    #     '''step'''
-    #     info = {}
-    #     # Execute one time step within the environment
-    #     # 初始化关节角度列表
-    #     joint_angles = []
-
-    #     # 获取每个关节的状态
-    #     for i in [1,2,3,4,5,6]:
-    #         joint_info = p.getJointState(self.fr5, i)
-    #         joint_angle = joint_info[0]  # 第一个元素是当前关节角度
-    #         joint_angles.append(joint_angle)
-
-    #     # 执行action
-    #     Fr5_joint_angles = np.array(joint_angles)+(np.array(action[0:6])/180*np.pi)
-    #     gripper = np.array([0,0])
-    #     anglenow = np.hstack([Fr5_joint_angles,gripper])
-    #     p.setJointMotorControlArray(self.fr5,[1,2,3,4,5,6,8,9],p.POSITION_CONTROL,targetPositions=anglenow)
-    #     joint_angles1 = []
-
-    #     # 获取每个关节的状态
-    #     for i in [1,2,3,4,5,6]:
-    #         joint_info1 = p.getJointState(self.fr51, i)
-    #         joint_angle1 = joint_info1[0]  # 第一个元素是当前关节角度
-    #         joint_angles1.append(joint_angle1)
-
-    #     # 执行action
-    #     Fr5_joint_angles1 = np.array(joint_angles1)+(np.array(action[6:12])/180*np.pi)
-    #     gripper1 = np.array([0,0])
-    #     anglenow1 = np.hstack([Fr5_joint_angles1,gripper1])
-    #     p.setJointMotorControlArray(self.fr51,[1,2,3,4,5,6,8,9],p.POSITION_CONTROL,targetPositions=anglenow1)
-        
-    #     for _ in range(20):
-    #         self.p.stepSimulation()
-    #         # time.sleep(1./240.)
-
-    #     self.reward,info = grasp_reward(self)
-        
-    #     # observation计算
-    #     self.get_observation()
-
-    #     self.step_num += 1
-
-    #     return self.observation, self.reward, self.terminated, self.truncated, info
 
     def reset(self, seed=None, options=None):
         '''重置环境参数'''

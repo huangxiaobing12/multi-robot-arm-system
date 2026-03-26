@@ -54,25 +54,25 @@ def cal_success_reward(self, robot_id, target_id, table_id, targettable_id, dist
 
     if success and self.step_num <= 100:
         success_reward = 1000
-        logger.info("%s 成功抓取！ step=%s, distance=%s", arm_name, self.step_num, distance)
+        logger.info("{} 成功抓取！ step={}, distance={}", arm_name, self.step_num, distance)
 
     elif other_contact:
         success_reward = -100
         fail = True
         if targettable_contact:
-            logger.info("%s 失败：碰撞目标台子！ step=%s, distance=%s", arm_name, self.step_num, distance)
+            logger.info("{} 失败：碰撞目标台子！ step={}, distance={}", arm_name, self.step_num, distance)
         elif table_contact:
-            logger.info("%s 失败：碰撞桌子！ step=%s, distance=%s", arm_name, self.step_num, distance)
+            logger.info("{} 失败：碰撞桌子！ step={}, distance={}", arm_name, self.step_num, distance)
 
     elif target_contact and not gripper_contact:
         success_reward = -100
         fail = True
-        logger.info("%s 失败：非夹爪部位接触目标！ step=%s, distance=%s", arm_name, self.step_num, distance)
+        logger.info("{} 失败：非夹爪部位接触目标！ step={}, distance={}", arm_name, self.step_num, distance)
 
     elif self.step_num > 100:
         success_reward = -100
         fail = True
-        logger.info("%s 失败：执行步数过多！ step=%s, distance=%s", arm_name, self.step_num, distance)
+        logger.info("{} 失败：执行步数过多！ step={}, distance={}", arm_name, self.step_num, distance)
 
     return success_reward, success, fail
 
@@ -102,42 +102,63 @@ def grasp_reward(self):
     """双机械臂双目标奖励：各抓各的"""
     info = {}
 
-    # arm1 -> target
-    distance_1 = get_distance(self, self.fr5, self.target)
-    success_reward_1, success_1, fail_1 = cal_success_reward(
-        self,
-        robot_id=self.fr5,
-        target_id=self.target,
-        table_id=self.table,
-        targettable_id=self.targettable,
-        distance=distance_1,
-        arm_name="arm1"
-    )
-    distance_reward_1 = cal_dis_reward(self, distance_1, "arm1")
+    arm1_reward = 0
+    arm2_reward = 0
+    distance_reward_1 = 0
+    distance_reward_2 = 0
+    fail_1 = False
+    fail_2 = False
 
+    # ---------- arm1 ----------
+    if not self.arm1_success:
+        distance_1 = get_distance(self, self.fr5, self.target)
+        success_reward_1, success_1, fail_1 = cal_success_reward(
+            self,
+            robot_id=self.fr5,
+            target_id=self.target,
+            table_id=self.table,
+            targettable_id=self.targettable,
+            distance=distance_1,
+            arm_name="arm1"
+        )
+        distance_reward_1 = cal_dis_reward(self, distance_1, "arm1")
+        arm1_reward = success_reward_1 + distance_reward_1
 
-    arm1_reward = success_reward_1 + distance_reward_1 
-    # arm2 -> target1
-    distance_2 = get_distance(self, self.fr5_2, self.target1)
-    success_reward_2, success_2, fail_2 = cal_success_reward(
-        self,
-        robot_id=self.fr5_2,
-        target_id=self.target1,
-        table_id=self.table,
-        targettable_id=self.targettable1,
-        distance=distance_2,
-        arm_name="arm2"
-    )
-    distance_reward_2 = cal_dis_reward(self, distance_2, "arm2")
-    arm2_reward = success_reward_2 + distance_reward_2 
+        # 一旦成功，永久记录
+        if success_1:
+            self.arm1_success = True
+            logger.info("arm1 已锁定成功状态")
+    else:
+        # 已经成功后，不再计算奖励/失败
+        arm1_reward = 0
 
-    # 总奖励
+    # ---------- arm2 ----------
+    if not self.arm2_success:
+        distance_2 = get_distance(self, self.fr5_2, self.target1)
+        success_reward_2, success_2, fail_2 = cal_success_reward(
+            self,
+            robot_id=self.fr5_2,
+            target_id=self.target1,
+            table_id=self.table,
+            targettable_id=self.targettable1,
+            distance=distance_2,
+            arm_name="arm2"
+        )
+        distance_reward_2 = cal_dis_reward(self, distance_2, "arm2")
+        arm2_reward = success_reward_2 + distance_reward_2
+
+        if success_2:
+            self.arm2_success = True
+            logger.info("arm2 已锁定成功状态")
+    else:
+        arm2_reward = 0
+
     total_reward = arm1_reward + arm2_reward
 
-    # 两个都成功才算成功
-    self.success = success_1 and success_2
+    # 两个都成功才算整个任务成功
+    self.success = self.arm1_success and self.arm2_success
 
-    # 任意一个失败，或者两个都成功，则结束
+    # 任意一个未完成机械臂失败，则终止；或者两个都成功，也终止
     if fail_1 or fail_2 or self.success:
         self.terminated = True
     else:
@@ -149,25 +170,10 @@ def grasp_reward(self):
     info["reward"] = total_reward
     info["is_success"] = self.success
     info["step_num"] = self.step_num
-    info["success_reward"] = (1 if self.success else 0)
+    info["arm1_success"] = self.arm1_success
+    info["arm2_success"] = self.arm2_success
+    info["success_reward"] = int(self.success)
     info["distance_reward"] = distance_reward_1 + distance_reward_2
-
-
-    # info["arm1"] = {
-    #     "distance": distance_1,
-    #     "success": success_1,
-    #     "success_reward": success_reward_1,
-    #     "distance_reward": distance_reward_1,
-    #     "total_reward": arm1_reward
-    # }
-
-    # info["arm2"] = {
-    #     "distance": distance_2,
-    #     "success": success_2,
-    #     "success_reward": success_reward_2,
-    #     "distance_reward": distance_reward_2,
-    #     "total_reward": arm2_reward
-    # }
 
     return total_reward, info
 def judge_success(distance, success_dis=0.02):
