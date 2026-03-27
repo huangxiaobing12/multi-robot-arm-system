@@ -59,7 +59,7 @@ if __name__ == '__main__':
     import pybullet_data
     print(pybullet_data.getDataPath())
     # Instantiate the env
-    num_train = 16
+    num_train = 1
     env = SubprocVecEnv([make_env(i) for i in range(num_train)])
     # env = DummyVecEnv([make_env(i) for i in range(num_train)])
     
@@ -68,7 +68,7 @@ if __name__ == '__main__':
     # HACK
     # Define and Train the agent
     # model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=logs_dir,batch_size=256,device="cuda")
-    best_zip = os.path.join(models_dir, "PPO-run-eposide286.zip")
+    best_zip = os.path.join(models_dir, "PPO-run-eposide20.zip")
     if os.path.isfile(best_zip):
         model = PPO.load(best_zip, env=env, device="cuda")
         print("✅ Loaded:", best_zip)
@@ -121,5 +121,6 @@ if __name__ == '__main__':
                     )
         
         # 保存模型
-        model.save(models_dir+f"/PPO-run-eposide{eposide}")
-        logger.info(f"**************eposide--{eposide} saved**************")
+        if eposide % 5 == 0:
+            model.save(models_dir+f"/PPO-run-eposide{eposide}")
+            logger.info(f"**************eposide--{eposide} saved**************")

@@ -175,6 +175,8 @@ class FR5_Env(gym.Env):
 
     def reset(self, seed=None, options=None):
         '''重置环境参数'''
+        self.arm1_success = False
+        self.arm2_success = False
         self.step_num = 0
         self.reward = 0
         self.terminated = False
