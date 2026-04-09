@@ -12,64 +12,22 @@ import random
 from interval import Interval
 
 def cal_success_reward(self, robot_id, target_id, table_id, targettable_id, distance, arm_name="arm"):
-    """计算单个机械臂的成功/失败奖励"""
-    gripper_joint_indices = [8, 9]
+    """计算单个机械臂的成功/失败奖励。
 
-    target_contact_points = p.getContactPoints(bodyA=robot_id, bodyB=target_id)
-    table_contact_points = p.getContactPoints(bodyA=robot_id, bodyB=table_id)
-    targettable_contact_points = p.getContactPoints(bodyA=robot_id, bodyB=targettable_id)
+    当前任务里夹爪固定不动，所以成功仅由末端到目标点的距离决定。
+    """
+    del robot_id, target_id, table_id, targettable_id
 
-    gripper_contact = False
-    target_contact = False
-    table_contact = False
-    targettable_contact = False
-    other_contact = False
-
-    # 接触目标
-    for contact_point in target_contact_points:
-        link_index = contact_point[3]
-
-        if link_index in gripper_joint_indices:
-            gripper_contact = True
-
-        if link_index not in gripper_joint_indices:
-            target_contact = True
-
-    # 接触桌子
-    for contact_point in table_contact_points:
-        link_index = contact_point[3]
-        if link_index not in [0, 1]:
-            other_contact = True
-            table_contact = True
-
-    # 接触目标台子
-    for _ in targettable_contact_points:
-        other_contact = True
-        targettable_contact = True
-
-    success = judge_success(distance, success_dis=0.02)
+    success = judge_success(distance, success_dis=self.success_distance)
 
     success_reward = 0
     fail = False
 
-    if success and self.step_num <= 100:
+    if success and self.step_num <= self.max_steps:
         success_reward = 1000
-        logger.info("{} 成功抓取！ step={}, distance={}", arm_name, self.step_num, distance)
+        logger.info("{} 成功到达目标点附近！ step={}, distance={}", arm_name, self.step_num, distance)
 
-    elif other_contact:
-        success_reward = -100
-        fail = True
-        if targettable_contact:
-            logger.info("{} 失败：碰撞目标台子！ step={}, distance={}", arm_name, self.step_num, distance)
-        elif table_contact:
-            logger.info("{} 失败：碰撞桌子！ step={}, distance={}", arm_name, self.step_num, distance)
-
-    elif target_contact and not gripper_contact:
-        success_reward = -100
-        fail = True
-        logger.info("{} 失败：非夹爪部位接触目标！ step={}, distance={}", arm_name, self.step_num, distance)
-
-    elif self.step_num > 100:
+    elif self.step_num > self.max_steps:
         success_reward = -100
         fail = True
         logger.info("{} 失败：执行步数过多！ step={}, distance={}", arm_name, self.step_num, distance)
@@ -108,6 +66,23 @@ def grasp_reward(self):
     distance_reward_2 = 0
     fail_1 = False
     fail_2 = False
+    robot_collision = check_robot_collision(self)
+
+    if robot_collision:
+        self.success = False
+        self.terminated = True
+        self.truncated = False
+        self.reward = -200
+        info["reward"] = self.reward
+        info["is_success"] = False
+        info["step_num"] = self.step_num
+        info["arm1_success"] = self.arm1_success
+        info["arm2_success"] = self.arm2_success
+        info["success_reward"] = 0
+        info["distance_reward"] = 0
+        info["robot_collision"] = True
+        logger.info("双机械臂发生碰撞！ step={}", self.step_num)
+        return self.reward, info
 
     # ---------- arm1 ----------
     if not self.arm1_success:
@@ -174,6 +149,7 @@ def grasp_reward(self):
     info["arm2_success"] = self.arm2_success
     info["success_reward"] = int(self.success)
     info["distance_reward"] = distance_reward_1 + distance_reward_2
+    info["robot_collision"] = False
 
     return total_reward, info
 def judge_success(distance, success_dis=0.02):
@@ -182,14 +158,20 @@ def judge_success(distance, success_dis=0.02):
 
 def get_distance(self, robot_id, target_id):
     """计算某个机械臂夹爪中心到目标的距离"""
-    gripper_link_pos = p.getLinkState(robot_id, 6)[0]
-    gripper_rot = R.from_quat(p.getLinkState(robot_id, 7)[1])
+    gripper_link_pos = self.p.getLinkState(robot_id, 6)[0]
+    gripper_rot = R.from_quat(self.p.getLinkState(robot_id, 7)[1])
 
     relative_position = np.array([0, 0, 0.15])
     rotated_relative_position = gripper_rot.apply(relative_position)
     gripper_centre_pos = np.array(gripper_link_pos) + rotated_relative_position
 
-    target_position = np.array(p.getBasePositionAndOrientation(target_id)[0])
+    target_position = np.array(self.p.getBasePositionAndOrientation(target_id)[0])
     distance = np.linalg.norm(gripper_centre_pos - target_position)
 
     return distance
+
+
+def check_robot_collision(self):
+    """检测两台机械臂之间是否发生碰撞。"""
+    contact_points = self.p.getContactPoints(bodyA=self.fr5, bodyB=self.fr5_2)
+    return len(contact_points) > 0

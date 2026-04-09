@@ -30,6 +30,11 @@ class FR5_Env(gym.Env):
 
     def __init__(self,gui = False):
         super(FR5_Env).__init__()
+        self.gui = gui
+        self.success_distance = 0.02
+        self.max_steps = 150
+        self.fixed_target_1 = [0.10, 0.45, 0.22]
+        self.fixed_target_2 = [-0.10, 0.55, 0.22]
         self.step_num = 0
         self.Con_cube = None
         # self.last_success = False
@@ -39,9 +44,12 @@ class FR5_Env(gym.Env):
         high_action = np.array([1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0])
         self.action_space = spaces.Box(low=low_action, high=high_action, dtype=np.float32)
 
-        low = np.zeros((1,24),dtype=np.float32)
-        high = np.ones((1,24),dtype=np.float32)
-        self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
+        self.observation_space = spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(24,),
+            dtype=np.float32,
+        )
 
         # 初始化pybullet环境
         if gui == False:
@@ -64,8 +72,13 @@ class FR5_Env(gym.Env):
         '''
         # boxId = self.p.loadURDF("plane.urdf")
         # 创建机械臂
-        self.fr5 = self.p.loadURDF(URDF_PATH, useFixedBase=True, basePosition=[0,-0.55,0], 
-                                   baseOrientation=p.getQuaternionFromEuler([0, 0, np.pi]),flags = p.URDF_USE_SELF_COLLISION)
+        self.fr5 = self.p.loadURDF(
+            URDF_PATH,
+            useFixedBase=True,
+            basePosition=[0, -0.12, 0],
+            baseOrientation=self.p.getQuaternionFromEuler([0, 0, np.pi]),
+            flags=self.p.URDF_USE_SELF_COLLISION,
+        )
         self.arm1_success = False
         self.arm2_success = False
         # self.fr5 = self.p.loadURDF("FR5_Reinforcement-learning/fr5_description/urdf/fr5v6.urdf",useFixedBase=True, basePosition=[0, 0, 0],
@@ -74,12 +87,16 @@ class FR5_Env(gym.Env):
         self.fr5_2 = self.p.loadURDF(
             URDF_PATH,
             useFixedBase=True,
-            basePosition=[0, 1.5, 0],
+            basePosition=[0, 1.07, 0],
             baseOrientation=self.p.getQuaternionFromEuler([0, 0, 0]),
             flags=self.p.URDF_USE_SELF_COLLISION
         )
         # 创建桌子
-        self.table = p.loadURDF(TABLE_PATH, basePosition=[0, 0.5, -0.63],baseOrientation=p.getQuaternionFromEuler([0, 0, np.pi/2]))
+        self.table = self.p.loadURDF(
+            TABLE_PATH,
+            basePosition=[0, 0.5, -0.63],
+            baseOrientation=self.p.getQuaternionFromEuler([0, 0, np.pi / 2]),
+        )
 
         # 创建目标
         collisionTargetId = self.p.createCollisionShape(shapeType=p.GEOM_CYLINDER,
@@ -119,7 +136,7 @@ class FR5_Env(gym.Env):
         # ---------- 机械臂1 ----------
         joint_angles_1 = []
         for i in joint_ids:
-            joint_info = p.getJointState(self.fr5, i)
+            joint_info = self.p.getJointState(self.fr5, i)
             joint_angles_1.append(joint_info[0])
 
         if not self.arm1_success:
@@ -131,17 +148,17 @@ class FR5_Env(gym.Env):
         gripper_1 = np.array([0.0, 0.0])
         target_positions_1 = np.hstack([target_joint_angles_1, gripper_1])
 
-        p.setJointMotorControlArray(
+        self.p.setJointMotorControlArray(
             self.fr5,
             ctrl_ids,
-            p.POSITION_CONTROL,
+            self.p.POSITION_CONTROL,
             targetPositions=target_positions_1
         )
 
         # ---------- 机械臂2 ----------
         joint_angles_2 = []
         for i in joint_ids:
-            joint_info = p.getJointState(self.fr5_2, i)
+            joint_info = self.p.getJointState(self.fr5_2, i)
             joint_angles_2.append(joint_info[0])
 
         if not self.arm2_success:
@@ -152,10 +169,10 @@ class FR5_Env(gym.Env):
         gripper_2 = np.array([0.0, 0.0])
         target_positions_2 = np.hstack([target_joint_angles_2, gripper_2])
 
-        p.setJointMotorControlArray(
+        self.p.setJointMotorControlArray(
             self.fr5_2,
             ctrl_ids,
-            p.POSITION_CONTROL,
+            self.p.POSITION_CONTROL,
             targetPositions=target_positions_2
         )
 
@@ -185,21 +202,24 @@ class FR5_Env(gym.Env):
         # 重新设置机械臂的位置
         neutral_angle =[ -49.45849125928217, -57.601209583849, -138.394013961943, -164.0052115563118,-49.45849125928217,0,0,0]
         neutral_angle = [x * math.pi / 180 for x in neutral_angle]
-        self.p.setJointMotorControlArray(self.fr5,[1,2,3,4,5,6,8,9],p.POSITION_CONTROL,targetPositions=neutral_angle)
         self.p.setJointMotorControlArray(
-        self.fr5_2, joint_ids, self.p.POSITION_CONTROL,
-        targetPositions=neutral_angle
-    )
+            self.fr5,
+            [1, 2, 3, 4, 5, 6, 8, 9],
+            self.p.POSITION_CONTROL,
+            targetPositions=neutral_angle,
+        )
+        self.p.setJointMotorControlArray(
+            self.fr5_2,
+            joint_ids,
+            self.p.POSITION_CONTROL,
+            targetPositions=neutral_angle
+        )
         # # 重新设置目标位置
         # self.goalx = np.random.uniform(-0.2, 0.2, 1)
         # self.goaly = np.random.uniform(0.6, 0.8, 1)
         # self.goalz = np.random.uniform(0.1, 0.3, 1)
-        self.goalx = 0
-        self.goaly = 0.1
-        self.goalz = 0.2
-        self.goalx1 = 0
-        self.goaly1 = 0.9
-        self.goalz1 = 0.2
+        self.goalx, self.goaly, self.goalz = self.fixed_target_1
+        self.goalx1, self.goaly1, self.goalz1 = self.fixed_target_2
         self.target_position = [self.goalx, self.goaly, self.goalz]
         self.targettable_position = [self.goalx, self.goaly, self.goalz-0.175]
         self.target_position1 = [self.goalx1, self.goaly1, self.goalz1]
@@ -208,6 +228,8 @@ class FR5_Env(gym.Env):
         self.p.resetBasePositionAndOrientation(self.target,self.target_position, [0, 0, 0, 1])
         self.p.resetBasePositionAndOrientation(self.targettable1,self.targettable_position1, [0, 0, 0, 1])
         self.p.resetBasePositionAndOrientation(self.target1,self.target_position1, [0, 0, 0, 1])
+        self.distance_last_1 = None
+        self.distance_last_2 = None
         
         
         for i in range(100):
@@ -227,20 +249,20 @@ class FR5_Env(gym.Env):
         """单个机械臂对应单个目标的观测"""
 
         # 末端位置
-        gripper_pos = p.getLinkState(robot_id, 6)[0]
+        gripper_pos = self.p.getLinkState(robot_id, 6)[0]
         gripper_pos = np.array(gripper_pos)
 
         relative_position = np.array([0, 0, 0.15])
 
         # 夹爪中心位置
-        rotation = R.from_quat(p.getLinkState(robot_id, 7)[1])
+        rotation = R.from_quat(self.p.getLinkState(robot_id, 7)[1])
         rotated_relative_position = rotation.apply(relative_position)
         gripper_centre_pos = gripper_pos + rotated_relative_position
 
         # 6个关节角
         joint_angles = [0, 0, 0, 0, 0, 0]
         for i in [1, 2, 3, 4, 5, 6]:
-            joint_info = p.getJointState(robot_id, i)
+            joint_info = self.p.getJointState(robot_id, i)
             joint_angles[i - 1] = joint_info[0] * 180 / np.pi
             if add_noise:
                 joint_angles[i - 1] = self.add_noise(joint_angles[i - 1], range=0, gaussian=True)
@@ -254,11 +276,11 @@ class FR5_Env(gym.Env):
         ], dtype=np.float32)
 
         # 对应目标位置
-        target_position = np.array(p.getBasePositionAndOrientation(target_id)[0], dtype=np.float32)
+        target_position = np.array(self.p.getBasePositionAndOrientation(target_id)[0], dtype=np.float32)
 
         obs_target_position = np.array([
             (target_position[0] + 0.2) / 0.4,
-            (target_position[1] - 0.6) / 0.2,
+            target_position[1] / 1.0,
             (target_position[2] - 0.1) / 0.2
         ], dtype=np.float32)
 
@@ -281,8 +303,39 @@ class FR5_Env(gym.Env):
         # 拼接成总观测
         self.observation = np.hstack((obs_arm1, obs_arm2)).astype(np.float32)
 
-        # 24维
-        self.observation = self.observation.reshape(1, 24)
+    def get_gripper_center(self, robot_id):
+        """返回夹爪中心的世界坐标。"""
+        gripper_pos = np.array(self.p.getLinkState(robot_id, 6)[0], dtype=np.float32)
+        rotation = R.from_quat(self.p.getLinkState(robot_id, 7)[1])
+        relative_position = np.array([0, 0, 0.15], dtype=np.float32)
+        return gripper_pos + rotation.apply(relative_position)
+
+    def get_debug_snapshot(self):
+        """返回调试/可视化所需的关键位置。"""
+        return {
+            "arm1_gripper_center": self.get_gripper_center(self.fr5),
+            "arm2_gripper_center": self.get_gripper_center(self.fr5_2),
+            "target_1": np.array(self.p.getBasePositionAndOrientation(self.target)[0], dtype=np.float32),
+            "target_2": np.array(self.p.getBasePositionAndOrientation(self.target1)[0], dtype=np.float32),
+        }
+
+    def draw_trajectory(self, arm1_points, arm2_points):
+        """在 GUI 中绘制两只机械臂的末端轨迹。"""
+        if not self.gui:
+            return
+
+        self.p.removeAllUserDebugItems()
+        self.render()
+
+        snapshot = self.get_debug_snapshot()
+        self.p.addUserDebugText("target1", snapshot["target_1"], [1, 0.2, 0.2], textSize=1.2)
+        self.p.addUserDebugText("target2", snapshot["target_2"], [0.2, 0.6, 1], textSize=1.2)
+
+        for start, end in zip(arm1_points[:-1], arm1_points[1:]):
+            self.p.addUserDebugLine(start, end, [1, 0, 0], lineWidth=2.0, lifeTime=0)
+
+        for start, end in zip(arm2_points[:-1], arm2_points[1:]):
+            self.p.addUserDebugLine(start, end, [0, 0.4, 1], lineWidth=2.0, lifeTime=0)
 
         # return self.observation
     # def get_observation(self,add_noise = False):
@@ -339,8 +392,13 @@ class FR5_Env(gym.Env):
 
     def render(self):
         '''设置观察角度'''
-        p.resetDebugVisualizerCamera(
-            cameraDistance=1.0, cameraYaw=90, cameraPitch=-7.6, cameraTargetPosition=[0.39, 0.45, 0.42])
+        if self.gui:
+            self.p.resetDebugVisualizerCamera(
+                cameraDistance=1.0,
+                cameraYaw=90,
+                cameraPitch=-7.6,
+                cameraTargetPosition=[0.39, 0.45, 0.42],
+            )
     
     def close(self):
         self.p.disconnect()
