@@ -13,14 +13,22 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 from stable_baselines3 import A2C,PPO,DDPG,TD3,SAC
 from stable_baselines3.common.vec_env import DummyVecEnv,SubprocVecEnv
-from .Fr5_env import FR5_Env
 import time
+
+if __package__ in (None, ""):
+    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if PROJECT_ROOT not in sys.path:
+        sys.path.insert(0, PROJECT_ROOT)
+    from FR_Gym.Fr5_env import FR5_Env
+    from FR_Gym.Callback import TensorboardCallback, ViewerCallback
+else:
+    from .Fr5_env import FR5_Env
+    from .Callback import TensorboardCallback, ViewerCallback
 
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import EvalCallback,CallbackList,BaseCallback,CheckpointCallback
-from .Callback import TensorboardCallback, ViewerCallback
 from loguru import logger
 from utils.arguments import get_args
 
@@ -124,7 +132,11 @@ if __name__ == '__main__':
     # 多环境训练时，额外在主进程开一个常驻 GUI 环境做观察/调试
     if args.gui and num_train > 1:
         viewer_env = DummyVecEnv([make_env(20_000, gui=True, monitor_dir=None)])
-        viewer_callback = ViewerCallback(viewer_env=viewer_env, step_freq=20)
+        viewer_callback = ViewerCallback(
+            viewer_env=viewer_env,
+            step_freq=args.viewer_step_freq,
+            steps_per_update=args.viewer_steps_per_update,
+        )
 
     TIMESTEPS = args.timesteps
     for eposide in range(1000):

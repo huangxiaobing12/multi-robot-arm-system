@@ -54,10 +54,11 @@ class TensorboardCallback(BaseCallback):
 
 
 class ViewerCallback(BaseCallback):
-    def __init__(self, viewer_env, step_freq=20, verbose=0):
+    def __init__(self, viewer_env, step_freq=1, steps_per_update=1, verbose=0):
         super().__init__(verbose)
         self.viewer_env = viewer_env
-        self.step_freq = step_freq
+        self.step_freq = max(1, int(step_freq))
+        self.steps_per_update = max(1, int(steps_per_update))
         self._obs = None
 
     def _on_training_start(self) -> None:
@@ -67,11 +68,15 @@ class ViewerCallback(BaseCallback):
         if self.n_calls % self.step_freq != 0:
             return True
 
-        action, _ = self.model.predict(self._obs, deterministic=True)
-        self._obs, _, dones, _ = self.viewer_env.step(action)
-        self.viewer_env.render()
+        dones = [False]
+        for _ in range(self.steps_per_update):
+            action, _ = self.model.predict(self._obs, deterministic=True)
+            self._obs, _, dones, _ = self.viewer_env.step(action)
 
-        if dones[0]:
-            self._obs = self.viewer_env.reset()
+            if dones[0]:
+                self._obs = self.viewer_env.reset()
+                break
+
+        self.viewer_env.render()
 
         return True

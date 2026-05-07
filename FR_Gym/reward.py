@@ -14,18 +14,23 @@ from interval import Interval
 def cal_success_reward(self, robot_id, target_id, table_id, targettable_id, distance, arm_name="arm"):
     """计算单个机械臂的成功/失败奖励。
 
-    当前任务里夹爪固定不动，所以成功仅由末端到目标点的距离决定。
+    当前任务里用夹爪代理圆柱与目标的接触来判定成功。
     """
-    del robot_id, target_id, table_id, targettable_id
+    del robot_id, table_id, targettable_id
 
-    success = judge_success(distance, success_dis=self.success_distance)
+    proxy_id = self.arm1_proxy if arm_name == "arm1" else self.arm2_proxy
+    proxy_contacts = self.p.getContactPoints(bodyA=proxy_id, bodyB=target_id)
+    success = len(proxy_contacts) > 0
+
+    if not success:
+        success = judge_success(distance, success_dis=self.success_distance)
 
     success_reward = 0
     fail = False
 
     if success and self.step_num <= self.max_steps:
         success_reward = 1000
-        logger.info("{} 成功到达目标点附近！ step={}, distance={}", arm_name, self.step_num, distance)
+        logger.info("{} 成功接触目标！ step={}, distance={}", arm_name, self.step_num, distance)
 
     elif self.step_num > self.max_steps:
         success_reward = -100

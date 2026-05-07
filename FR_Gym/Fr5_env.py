@@ -33,8 +33,10 @@ class FR5_Env(gym.Env):
         self.gui = gui
         self.success_distance = 0.02
         self.max_steps = 150
-        self.fixed_target_1 = [0.10, 0.45, 0.22]
-        self.fixed_target_2 = [-0.10, 0.55, 0.22]
+        self.gripper_proxy_radius = 0.012
+        self.gripper_proxy_height = 0.04
+        self.fixed_target_1 = [0.0, 0.6, 0.22]
+        self.fixed_target_2 = [0.0, 0.4, 0.22]
         self.step_num = 0
         self.Con_cube = None
         # self.last_success = False
@@ -63,6 +65,7 @@ class FR5_Env(gym.Env):
 
         self.arm1_success = False
         self.arm2_success = False
+        self._camera_configured = False
         # 初始化环境
         self.init_env()
 
@@ -103,20 +106,26 @@ class FR5_Env(gym.Env):
                                           radius=0.02,height = 0.05)
         self.target = self.p.createMultiBody(baseMass=0,  # 质量
                            baseCollisionShapeIndex=collisionTargetId,
-                           basePosition=[0.5, 0.5, 2]) 
+                           basePosition=self.fixed_target_1) 
         self.target1 = self.p.createMultiBody(baseMass=0,  # 质量
                            baseCollisionShapeIndex=collisionTargetId,
-                           basePosition=[0.5, 0.5, 2]) 
+                           basePosition=self.fixed_target_2) 
         
         # 创建目标杯子的台子
         collisionTargetId = self.p.createCollisionShape(shapeType=p.GEOM_CYLINDER,
                                             radius=0.03,height = 0.3)
         self.targettable = self.p.createMultiBody(baseMass=0,  # 质量
                             baseCollisionShapeIndex=collisionTargetId,
-                            basePosition=[0.5, 0.5, 2]) 
+                            basePosition=[self.fixed_target_1[0], self.fixed_target_1[1], self.fixed_target_1[2] - 0.175]) 
         self.targettable1 = self.p.createMultiBody(baseMass=0,  # 质量
                             baseCollisionShapeIndex=collisionTargetId,
-                            basePosition=[0.5, 0.5, 2])                                                            
+                            basePosition=[self.fixed_target_2[0], self.fixed_target_2[1], self.fixed_target_2[2] - 0.175])
+
+        self.arm1_proxy = self.create_gripper_proxy([0.95, 0.2, 0.2, 0.7])
+        self.arm2_proxy = self.create_gripper_proxy([0.2, 0.45, 0.95, 0.7])
+        self.disable_proxy_self_collision(self.arm1_proxy, self.fr5)
+        self.disable_proxy_self_collision(self.arm2_proxy, self.fr5_2)
+        self.update_gripper_proxies()
 
     def step(self, action):
         """step"""
@@ -180,6 +189,8 @@ class FR5_Env(gym.Env):
         for _ in range(20):
             self.p.stepSimulation()
 
+        self.update_gripper_proxies()
+
         # 计算奖励
         self.reward, info = grasp_reward(self)
 
@@ -236,6 +247,7 @@ class FR5_Env(gym.Env):
             self.p.stepSimulation()
             # time.sleep(10./240.)
 
+        self.update_gripper_proxies()
         self.get_observation()
         
         
@@ -305,10 +317,52 @@ class FR5_Env(gym.Env):
 
     def get_gripper_center(self, robot_id):
         """返回夹爪中心的世界坐标。"""
-        gripper_pos = np.array(self.p.getLinkState(robot_id, 6)[0], dtype=np.float32)
-        rotation = R.from_quat(self.p.getLinkState(robot_id, 7)[1])
+        gripper_pos, gripper_quat = self.get_gripper_pose(robot_id)
+        rotation = R.from_quat(gripper_quat)
         relative_position = np.array([0, 0, 0.15], dtype=np.float32)
         return gripper_pos + rotation.apply(relative_position)
+
+    def get_gripper_pose(self, robot_id):
+        """返回末端夹爪参考姿态。"""
+        gripper_pos = np.array(self.p.getLinkState(robot_id, 6)[0], dtype=np.float32)
+        gripper_quat = np.array(self.p.getLinkState(robot_id, 7)[1], dtype=np.float32)
+        return gripper_pos, gripper_quat
+
+    def create_gripper_proxy(self, rgba_color):
+        """创建一个随夹爪移动的小圆柱代理体。"""
+        collision_id = self.p.createCollisionShape(
+            shapeType=self.p.GEOM_CYLINDER,
+            radius=self.gripper_proxy_radius,
+            height=self.gripper_proxy_height,
+        )
+        visual_id = self.p.createVisualShape(
+            shapeType=self.p.GEOM_CYLINDER,
+            radius=self.gripper_proxy_radius,
+            length=self.gripper_proxy_height,
+            rgbaColor=rgba_color,
+        )
+        return self.p.createMultiBody(
+            baseMass=0.0,
+            baseCollisionShapeIndex=collision_id,
+            baseVisualShapeIndex=visual_id,
+            basePosition=[0, 0, 0],
+            baseOrientation=[0, 0, 0, 1],
+        )
+
+    def disable_proxy_self_collision(self, proxy_id, robot_id):
+        """关闭代理体和所属机械臂自身的碰撞，保留与外界的接触。"""
+        for link_index in range(-1, self.p.getNumJoints(robot_id)):
+            self.p.setCollisionFilterPair(proxy_id, robot_id, -1, link_index, 0)
+
+    def update_gripper_proxies(self):
+        """同步两个夹爪代理体到当前夹爪中心位置。"""
+        arm1_center = self.get_gripper_center(self.fr5)
+        _, arm1_quat = self.get_gripper_pose(self.fr5)
+        self.p.resetBasePositionAndOrientation(self.arm1_proxy, arm1_center, arm1_quat)
+
+        arm2_center = self.get_gripper_center(self.fr5_2)
+        _, arm2_quat = self.get_gripper_pose(self.fr5_2)
+        self.p.resetBasePositionAndOrientation(self.arm2_proxy, arm2_center, arm2_quat)
 
     def get_debug_snapshot(self):
         """返回调试/可视化所需的关键位置。"""
@@ -392,13 +446,14 @@ class FR5_Env(gym.Env):
 
     def render(self):
         '''设置观察角度'''
-        if self.gui:
+        if self.gui and not self._camera_configured:
             self.p.resetDebugVisualizerCamera(
                 cameraDistance=1.0,
                 cameraYaw=90,
                 cameraPitch=-7.6,
                 cameraTargetPosition=[0.39, 0.45, 0.42],
             )
+            self._camera_configured = True
     
     def close(self):
         self.p.disconnect()

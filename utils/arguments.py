@@ -65,6 +65,18 @@ def get_args():
     )
 
     parser.add_argument('--timesteps', type=int, default=2000)#30000
+    parser.add_argument(
+        '--viewer_step_freq',
+        type=int,
+        default=1,
+        help="训练时 GUI 展示环境每隔多少次回调更新一次，越小越流畅",
+    )
+    parser.add_argument(
+        '--viewer_steps_per_update',
+        type=int,
+        default=1,
+        help="每次 GUI 更新时连续推进多少个展示步，越大看起来越快",
+    )
 
     args = parser.parse_args()
     kwargs = vars(args)
