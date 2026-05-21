@@ -65,7 +65,7 @@ if __name__ == '__main__':
     import pybullet_data
     print(pybullet_data.getDataPath())
     # Instantiate the env
-    num_train = 16
+    num_train = 12
     if num_train == 1:
         env = DummyVecEnv([make_env(0, gui=args.gui, monitor_dir=logs_dir)])
     else:
