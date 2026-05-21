@@ -20,7 +20,7 @@ now = time.strftime('%m%d-%H%M%S', time.localtime())
 def get_args():
     parser = argparse.ArgumentParser(description="Running time configurations")
     gui_default = sys.gettrace() is not None
-
+    gui_default = True
     # ===== 路径类参数（全部改为绝对路径 + os.path.join） =====
     parser.add_argument(
         '--model_path',

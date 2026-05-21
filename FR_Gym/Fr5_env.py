@@ -32,7 +32,7 @@ class FR5_Env(gym.Env):
         super(FR5_Env).__init__()
         self.gui = gui
         self.success_distance = 0.02
-        self.max_steps = 150
+        self.max_steps = 225
         self.gripper_proxy_radius = 0.012
         self.gripper_proxy_height = 0.04
         self.fixed_target_1 = [0.0, 0.6, 0.22]
@@ -78,7 +78,7 @@ class FR5_Env(gym.Env):
         self.fr5 = self.p.loadURDF(
             URDF_PATH,
             useFixedBase=True,
-            basePosition=[0, -0.12, 0],
+            basePosition=[0, 0.05, 0],
             baseOrientation=self.p.getQuaternionFromEuler([0, 0, np.pi]),
             flags=self.p.URDF_USE_SELF_COLLISION,
         )
@@ -90,7 +90,7 @@ class FR5_Env(gym.Env):
         self.fr5_2 = self.p.loadURDF(
             URDF_PATH,
             useFixedBase=True,
-            basePosition=[0, 1.07, 0],
+            basePosition=[0, 0.95, 0],
             baseOrientation=self.p.getQuaternionFromEuler([0, 0, 0]),
             flags=self.p.URDF_USE_SELF_COLLISION
         )
@@ -210,20 +210,22 @@ class FR5_Env(gym.Env):
         self.terminated = False
         self.success = False
         joint_ids = [1,2,3,4,5,6,8,9]
-        # 重新设置机械臂的位置
-        neutral_angle =[ -49.45849125928217, -57.601209583849, -138.394013961943, -164.0052115563118,-49.45849125928217,0,0,0]
-        neutral_angle = [x * math.pi / 180 for x in neutral_angle]
+        # 重新设置机械臂的位置。左右底座已做 180 度中心对称，关节角保持同一套局部姿态。
+        neutral_angle_1 = [-49.45849125928217, -57.601209583849, -138.394013961943, -164.0052115563118, -49.45849125928217, 0, 0, 0]
+        neutral_angle_2 = [-49.45849125928217, -57.601209583849, -138.394013961943, -164.0052115563118, -49.45849125928217, 0, 0, 0]
+        neutral_angle_1 = [x * math.pi / 180 for x in neutral_angle_1]
+        neutral_angle_2 = [x * math.pi / 180 for x in neutral_angle_2]
         self.p.setJointMotorControlArray(
             self.fr5,
             [1, 2, 3, 4, 5, 6, 8, 9],
             self.p.POSITION_CONTROL,
-            targetPositions=neutral_angle,
+            targetPositions=neutral_angle_1,
         )
         self.p.setJointMotorControlArray(
             self.fr5_2,
             joint_ids,
             self.p.POSITION_CONTROL,
-            targetPositions=neutral_angle
+            targetPositions=neutral_angle_2
         )
         # # 重新设置目标位置
         # self.goalx = np.random.uniform(-0.2, 0.2, 1)
