@@ -36,7 +36,7 @@ class FR5_Env(gym.Env):
         self.gripper_proxy_radius = 0.012
         self.gripper_proxy_height = 0.04
         self.fixed_target_1 = [0.0, 0.6, 0.22]
-        self.fixed_target_2 = [0.0, 0.4, 0.22]
+        self.fixed_target_2 = [0.0, 0.4, 0.145]
         self.step_num = 0
         self.Con_cube = None
         # self.last_success = False
@@ -114,12 +114,14 @@ class FR5_Env(gym.Env):
         # 创建目标杯子的台子
         collisionTargetId = self.p.createCollisionShape(shapeType=p.GEOM_CYLINDER,
                                             radius=0.03,height = 0.3)
+        collisionTargetId1 = self.p.createCollisionShape(shapeType=p.GEOM_CYLINDER,
+                                            radius=0.03,height = 0.225)
         self.targettable = self.p.createMultiBody(baseMass=0,  # 质量
                             baseCollisionShapeIndex=collisionTargetId,
                             basePosition=[self.fixed_target_1[0], self.fixed_target_1[1], self.fixed_target_1[2] - 0.175]) 
         self.targettable1 = self.p.createMultiBody(baseMass=0,  # 质量
-                            baseCollisionShapeIndex=collisionTargetId,
-                            basePosition=[self.fixed_target_2[0], self.fixed_target_2[1], self.fixed_target_2[2] - 0.175])
+                            baseCollisionShapeIndex=collisionTargetId1,
+                            basePosition=[self.fixed_target_2[0], self.fixed_target_2[1], self.fixed_target_2[2] - 0.1375])
 
         self.arm1_proxy = self.create_gripper_proxy([0.95, 0.2, 0.2, 0.7])
         self.arm2_proxy = self.create_gripper_proxy([0.2, 0.45, 0.95, 0.7])
@@ -236,7 +238,7 @@ class FR5_Env(gym.Env):
         self.target_position = [self.goalx, self.goaly, self.goalz]
         self.targettable_position = [self.goalx, self.goaly, self.goalz-0.175]
         self.target_position1 = [self.goalx1, self.goaly1, self.goalz1]
-        self.targettable_position1 = [self.goalx1, self.goaly1, self.goalz1-0.175]
+        self.targettable_position1 = [self.goalx1, self.goaly1, self.goalz1-0.1375]
         self.p.resetBasePositionAndOrientation(self.targettable,self.targettable_position, [0, 0, 0, 1])
         self.p.resetBasePositionAndOrientation(self.target,self.target_position, [0, 0, 0, 1])
         self.p.resetBasePositionAndOrientation(self.targettable1,self.targettable_position1, [0, 0, 0, 1])
