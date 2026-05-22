@@ -65,7 +65,7 @@ if __name__ == '__main__':
     import pybullet_data
     print(pybullet_data.getDataPath())
     # Instantiate the env
-    num_train = 12
+    num_train = 16
     if num_train == 1:
         env = DummyVecEnv([make_env(0, gui=args.gui, monitor_dir=logs_dir)])
     else:
@@ -139,7 +139,7 @@ if __name__ == '__main__':
         )
 
     TIMESTEPS = args.timesteps
-    for eposide in range(20):
+    for eposide in range(15):
         # 创建 CheckpointCallback 实例来保存模型检查点
         checkpoint_callback = CheckpointCallback(save_freq=1000, save_path=checkpoints)
         callbacks_with_checkpoint = [eval_callback, checkpoint_callback, tensorboard_callback]

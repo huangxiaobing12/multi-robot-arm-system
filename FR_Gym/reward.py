@@ -44,16 +44,21 @@ def cal_dis_reward(self, distance, arm_id):
 
     if arm_id == "arm1":
         last_attr = "distance_last_1"
+        arm_weight = 1.0
     elif arm_id == "arm2":
         last_attr = "distance_last_2"
+        arm_weight = 1.3
     else:
         raise ValueError("arm_id必须是 'arm1' 或 'arm2'")
 
     if self.step_num == 0:
-        distance_reward = 0
+        distance_progress_reward = 0
     else:
         distance_last = getattr(self, last_attr)
-        distance_reward = 1000 * (distance_last - distance)
+        distance_progress_reward = 1000 * (distance_last - distance)
+
+    near_target_reward = 5.0 / (distance + 0.02)
+    distance_reward = arm_weight * (distance_progress_reward + near_target_reward)
 
     setattr(self, last_attr, distance)
 
@@ -77,7 +82,7 @@ def grasp_reward(self):
         self.success = False
         self.terminated = True
         self.truncated = False
-        self.reward = -200
+        self.reward = -400
         info["reward"] = self.reward
         info["is_success"] = False
         info["step_num"] = self.step_num
