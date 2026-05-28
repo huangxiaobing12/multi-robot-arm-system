@@ -139,7 +139,7 @@ if __name__ == '__main__':
         )
 
     TIMESTEPS = args.timesteps
-    for eposide in range(15):
+    for eposide in range(30):
         # 创建 CheckpointCallback 实例来保存模型检查点
         checkpoint_callback = CheckpointCallback(save_freq=1000, save_path=checkpoints)
         callbacks_with_checkpoint = [eval_callback, checkpoint_callback, tensorboard_callback]

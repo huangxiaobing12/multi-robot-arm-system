@@ -8,7 +8,16 @@ class TensorboardCallback(BaseCallback):
         self.episode_counts = []
         self.episode_total_rewards = []
         self.episode_dis_rewards = []
+        self.episode_joint_success_rewards = []
+        self.episode_joint_progress_rewards = []
+        self.episode_lagging_distance_penalties = []
+        self.episode_incomplete_task_penalties = []
         self.episode_success = []
+        self.episode_arm1_success = []
+        self.episode_arm2_success = []
+        self.episode_robot_collisions = []
+        self.episode_final_arm1_distances = []
+        self.episode_final_arm2_distances = []
 
         self.log_interval = 30  # 每30个回合记录一次
 
@@ -18,36 +27,81 @@ class TensorboardCallback(BaseCallback):
         self.episode_counts = [0 for _ in range(self.n_envs)]
         self.episode_total_rewards = [0.0 for _ in range(self.n_envs)]
         self.episode_dis_rewards = [0.0 for _ in range(self.n_envs)]
+        self.episode_joint_success_rewards = [0.0 for _ in range(self.n_envs)]
+        self.episode_joint_progress_rewards = [0.0 for _ in range(self.n_envs)]
+        self.episode_lagging_distance_penalties = [0.0 for _ in range(self.n_envs)]
+        self.episode_incomplete_task_penalties = [0.0 for _ in range(self.n_envs)]
         self.episode_success = [0.0 for _ in range(self.n_envs)]
+        self.episode_arm1_success = [0.0 for _ in range(self.n_envs)]
+        self.episode_arm2_success = [0.0 for _ in range(self.n_envs)]
+        self.episode_robot_collisions = [0.0 for _ in range(self.n_envs)]
+        self.episode_final_arm1_distances = [0.0 for _ in range(self.n_envs)]
+        self.episode_final_arm2_distances = [0.0 for _ in range(self.n_envs)]
 
     def _on_step(self) -> bool:
         # 遍历所有环境
         for i in range(len(self.locals['rewards'])):
             self.episode_total_rewards[i] += self.locals['rewards'][i]
             self.episode_dis_rewards[i] += self.locals['infos'][i]['distance_reward']
+            self.episode_joint_success_rewards[i] += self.locals['infos'][i].get('joint_success_reward', 0)
+            self.episode_joint_progress_rewards[i] += self.locals['infos'][i].get('joint_progress_reward', 0)
+            self.episode_lagging_distance_penalties[i] += self.locals['infos'][i].get('lagging_distance_penalty', 0)
+            self.episode_incomplete_task_penalties[i] += self.locals['infos'][i].get('incomplete_task_penalty', 0)
             self.episode_success[i] += self.locals['infos'][i]['success_reward']
             self.episode_lengths[i] += 1
 
             # 检查回合是否结束
             if self.locals['dones'][i]:
                 self.episode_counts[i] += 1
+                self.episode_arm1_success[i] += int(self.locals['infos'][i].get('arm1_success', False))
+                self.episode_arm2_success[i] += int(self.locals['infos'][i].get('arm2_success', False))
+                self.episode_robot_collisions[i] += int(self.locals['infos'][i].get('robot_collision', False))
+                self.episode_final_arm1_distances[i] += self.locals['infos'][i].get('arm1_distance', 0)
+                self.episode_final_arm2_distances[i] += self.locals['infos'][i].get('arm2_distance', 0)
 
                 # 每 log_interval 个回合记录一次平均指标
                 if self.episode_counts[i] % self.log_interval == 0:
                     avg_reward = self.episode_total_rewards[i] / self.log_interval
                     avg_dis_reward = self.episode_dis_rewards[i] / self.log_interval
+                    avg_joint_success_reward = self.episode_joint_success_rewards[i] / self.log_interval
+                    avg_joint_progress_reward = self.episode_joint_progress_rewards[i] / self.log_interval
+                    avg_lagging_distance_penalty = self.episode_lagging_distance_penalties[i] / self.log_interval
+                    avg_incomplete_task_penalty = self.episode_incomplete_task_penalties[i] / self.log_interval
                     avg_success = self.episode_success[i] / self.log_interval
+                    avg_arm1_success = self.episode_arm1_success[i] / self.log_interval
+                    avg_arm2_success = self.episode_arm2_success[i] / self.log_interval
+                    avg_robot_collision = self.episode_robot_collisions[i] / self.log_interval
+                    avg_final_arm1_distance = self.episode_final_arm1_distances[i] / self.log_interval
+                    avg_final_arm2_distance = self.episode_final_arm2_distances[i] / self.log_interval
 
                     self.model.logger.record(f"reward/env_{i}", avg_reward, exclude="stdout")
                     self.model.logger.record(f"distance_reward/env_{i}", avg_dis_reward, exclude="stdout")
+                    self.model.logger.record(f"joint_success_reward/env_{i}", avg_joint_success_reward, exclude="stdout")
+                    self.model.logger.record(f"joint_progress_reward/env_{i}", avg_joint_progress_reward, exclude="stdout")
+                    self.model.logger.record(f"lagging_distance_penalty/env_{i}", avg_lagging_distance_penalty, exclude="stdout")
+                    self.model.logger.record(f"incomplete_task_penalty/env_{i}", avg_incomplete_task_penalty, exclude="stdout")
                     self.model.logger.record(f"success_rate/env_{i}", avg_success, exclude="stdout")
+                    self.model.logger.record(f"arm1_success_rate/env_{i}", avg_arm1_success, exclude="stdout")
+                    self.model.logger.record(f"arm2_success_rate/env_{i}", avg_arm2_success, exclude="stdout")
+                    self.model.logger.record(f"robot_collision_rate/env_{i}", avg_robot_collision, exclude="stdout")
+                    self.model.logger.record(f"final_arm1_distance/env_{i}", avg_final_arm1_distance, exclude="stdout")
+                    self.model.logger.record(f"final_arm2_distance/env_{i}", avg_final_arm2_distance, exclude="stdout")
 
                     self.model.logger.dump(step=self.num_timesteps)
 
                     # 重置累积奖励和回合长度
                     self.episode_total_rewards[i] = 0.0
                     self.episode_dis_rewards[i] = 0.0
+                    self.episode_joint_success_rewards[i] = 0.0
+                    self.episode_joint_progress_rewards[i] = 0.0
+                    self.episode_lagging_distance_penalties[i] = 0.0
+                    self.episode_incomplete_task_penalties[i] = 0.0
                     self.episode_success[i] = 0.0
+                    self.episode_arm1_success[i] = 0.0
+                    self.episode_arm2_success[i] = 0.0
+                    self.episode_robot_collisions[i] = 0.0
+                    self.episode_final_arm1_distances[i] = 0.0
+                    self.episode_final_arm2_distances[i] = 0.0
                     self.episode_lengths[i] = 0
 
         return True
